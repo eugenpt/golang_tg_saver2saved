@@ -18,4 +18,4 @@ I tried to send things to Saved messages in Telegram, but the API is quite compl
 - Run `golang_tg_saver2saved`
 
 
-
+requires ffmpeg to convert videos
