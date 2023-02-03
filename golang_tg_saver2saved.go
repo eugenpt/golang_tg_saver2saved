@@ -26,10 +26,11 @@ var dir_fname string = "dir.txt"
 var token_fname string = "token.txt"
 
 var is_video_ext = map[string]bool{
-	".flv": true,
-	".mp4": true,
-	".avi": true,
-	".mov": true,
+	".flv":  true,
+	".mp4":  true,
+	".avi":  true,
+	".mov":  true,
+	".webm": true,
 }
 
 var is_photo_ext = map[string]bool{
@@ -73,19 +74,26 @@ func botAPIUrl(method_n_stuff string) string {
 }
 
 func send_text(text string, chat_id int) {
+	fmt.Println("Sending text to %d : %s", chat_id, text)
 	get_request(botAPIUrl("sendMessage?chat_id=" + strconv.Itoa(chat_id) + "&text=" + url.QueryEscape(text)))
 }
 
-func send_photo_to_all(filePath string) {
+func send_with_logs(send_fun func(string, int), fileType string, filePath string) {
+	fmt.Printf("Sending as a %s [%s]\n", fileType, filePath)
 	for chat_id := range Chats {
-		send_photo(filePath, chat_id)
+		fmt.Printf("Sending as a %s to %d [%s]\n", fileType, chat_id, filePath)
+		send_fun(filePath, chat_id)
+		fmt.Printf("Sending as a %s to %d [%s] OK\n", fileType, chat_id, filePath)
 	}
+	fmt.Printf("Sending as a %s [%s] OK\n", fileType, filePath)
+}
+
+func send_photo_to_all(filePath string) {
+	send_with_logs(send_photo, "photo", filePath)
 }
 
 func send_video_to_all(filePath string) {
-	for chat_id := range Chats {
-		send_video(filePath, chat_id)
-	}
+	send_with_logs(send_video, "video", filePath)
 }
 
 func send_photo(filePath string, chat_id int) {
@@ -283,17 +291,20 @@ func rescan_folder() {
 		if processedFiles[f.Name()] {
 			continue
 		}
+		processedFiles[f.Name()] = true
 		if is_video_ext[filepath.Ext(f.Name())] {
-			processedFiles[f.Name()] = true
-
 			fmt.Println("Found new video file: " + f.Name())
 			outfile := f.Name() + ".mp4" //filepath.Base(f.Name()) + ".mp4"
 
 			processedFiles[outfile] = true
 			cmd := exec.Command("ffmpeg", "-i", f.Name(), outfile)
 			cmd.Dir = dir
-			if err := cmd.Run(); err != nil {
-				fmt.Println("Error converting file:", err)
+			if out, err := cmd.Output(); err != nil {
+				fmt.Printf("Error converting file [%s] : %v\n", f.Name(), err)
+				fmt.Printf("%s\n", string(out))
+
+				fmt.Println("Trying to send as a photo: ", f.Name())
+				send_photo_to_all(filepath.Join(dir, f.Name()))
 			} else {
 				fmt.Println("Conversion successful. Output file: " + outfile)
 
@@ -305,11 +316,9 @@ func rescan_folder() {
 				send_video_to_all(filepath.Join(dir, outfile))
 			}
 
-		}
-		if is_photo_ext[filepath.Ext(f.Name())] {
+		} else if is_photo_ext[filepath.Ext(f.Name())] {
 			fmt.Println("Found new photo: ", f.Name())
 			send_photo_to_all(filepath.Join(dir, f.Name()))
-			processedFiles[f.Name()] = true
 		}
 	}
 }
